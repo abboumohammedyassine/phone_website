@@ -25,6 +25,7 @@ export type CartItem = {
   color?: string;
   storage?: string;
   qty: number;
+  stock?: number; // stock connu à l'ajout, sert à plafonner la quantité
 };
 
 export type Wilaya = {

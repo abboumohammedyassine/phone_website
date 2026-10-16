@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Product } from "@/lib/types";
-import { useCartStore } from "@/lib/cart-store";
+import { useCartStore, MAX_QTY_PER_LINE } from "@/lib/cart-store";
 import { formatDZD } from "@/lib/utils";
 import { Truck, Banknote } from "lucide-react";
 
@@ -14,6 +14,10 @@ export default function AddToCartPanel({ product }: { product: Product }) {
   const addItem = useCartStore((s) => s.addItem);
   const router = useRouter();
 
+  const outOfStock = product.stock <= 0;
+  // On ne peut pas dépasser le stock réel, ni la limite par ligne de commande.
+  const maxQty = Math.max(1, Math.min(product.stock, MAX_QTY_PER_LINE));
+
   const handleAdd = () => {
     addItem({
       productId: product.id,
@@ -23,6 +27,7 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       color,
       storage,
       qty,
+      stock: product.stock,
     });
   };
 
@@ -39,11 +44,13 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       {product.colors && product.colors.length > 0 && (
         <div className="mt-6">
           <p className="mb-2 text-sm text-steel-300">Couleur</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {product.colors.map((c) => (
               <button
                 key={c}
+                type="button"
                 onClick={() => setColor(c)}
+                aria-pressed={color === c}
                 className={`rounded-full border px-3 py-1.5 text-sm ${
                   color === c
                     ? "border-amber-500 text-amber-400"
@@ -60,11 +67,13 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       {product.storage_options && product.storage_options.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-sm text-steel-300">Stockage</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {product.storage_options.map((s) => (
               <button
                 key={s}
+                type="button"
                 onClick={() => setStorage(s)}
+                aria-pressed={storage === s}
                 className={`rounded-full border px-3 py-1.5 text-sm ${
                   storage === s
                     ? "border-amber-500 text-amber-400"
@@ -81,35 +90,46 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       <div className="mt-6 flex items-center gap-3">
         <div className="flex items-center rounded-full border border-carbon-600">
           <button
-            className="px-3 py-2 text-steel-300"
+            type="button"
+            aria-label="Diminuer la quantité"
+            className="px-3 py-2 text-steel-300 disabled:opacity-30"
+            disabled={outOfStock || qty <= 1}
             onClick={() => setQty((q) => Math.max(1, q - 1))}
           >
             −
           </button>
           <span className="w-8 text-center text-sm">{qty}</span>
-          <button className="px-3 py-2 text-steel-300" onClick={() => setQty((q) => q + 1)}>
+          <button
+            type="button"
+            aria-label="Augmenter la quantité"
+            className="px-3 py-2 text-steel-300 disabled:opacity-30"
+            disabled={outOfStock || qty >= maxQty}
+            onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+          >
             +
           </button>
         </div>
         <span className="text-sm text-steel-400">
-          {product.stock > 0 ? `${product.stock} en stock` : "Rupture de stock"}
+          {outOfStock ? "Rupture de stock" : `${product.stock} en stock`}
         </span>
       </div>
 
       <div className="mt-6 flex gap-3">
         <button
+          type="button"
           onClick={handleAdd}
-          disabled={product.stock === 0}
+          disabled={outOfStock}
           className="flex-1 rounded-full bg-amber-500 py-3 text-sm font-medium text-carbon-950 transition hover:bg-amber-400 disabled:opacity-40"
         >
           Ajouter au panier
         </button>
         <button
+          type="button"
           onClick={() => {
             handleAdd();
             router.push("/checkout");
           }}
-          disabled={product.stock === 0}
+          disabled={outOfStock}
           className="flex-1 rounded-full border border-carbon-600 py-3 text-sm text-porcelain transition hover:border-steel-400 disabled:opacity-40"
         >
           Commander maintenant

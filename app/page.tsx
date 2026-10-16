@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { getFeaturedProducts } from "@/lib/products";
 
+// Régénère la page toutes les 60 s : les produits "mis en avant" ajoutés dans l'admin
+// apparaissent sans redéployer le site.
+export const revalidate = 60;
+
 export default async function HomePage() {
   const products = await getFeaturedProducts();
 

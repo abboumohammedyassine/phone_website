@@ -1,39 +1,40 @@
+// app/api/shipping-estimate/route.ts
+// Estimation des frais affichée au checkout. Même logique que /api/orders
+// (c'est /api/orders qui fait foi pour le montant réellement facturé).
+
 import { NextRequest, NextResponse } from "next/server";
-import { getShippingFee } from "@/lib/yalidine";
+import { quoteShipping } from "@/lib/yalidine";
+import { shippingEstimateSchema, formatZodError } from "@/lib/validation";
+
+export const dynamic = "force-dynamic";
 
 const STORE_WILAYA_ID = Number(process.env.STORE_WILAYA_ID || 16);
 
 export async function POST(req: NextRequest) {
+  let json: unknown;
   try {
-    const body = await req.json();
-    const { wilaya_id, delivery_type } = body;
+    json = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
+  }
 
-    if (!wilaya_id || !delivery_type) {
-      return NextResponse.json(
-        { error: "Wilaya et type de livraison requis." },
-        { status: 400 }
-      );
-    }
+  const parsed = shippingEstimateSchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+  }
 
-    if (delivery_type !== "home" && delivery_type !== "stopdesk") {
-      return NextResponse.json(
-        { error: "Type de livraison invalide." },
-        { status: 400 }
-      );
-    }
-
-    const shipping_cost = await getShippingFee({
+  try {
+    const { fee, source } = await quoteShipping({
       fromWilayaId: STORE_WILAYA_ID,
-      toWilayaId: Number(wilaya_id),
-      deliveryType: delivery_type,
+      toWilayaId: parsed.data.wilaya_id,
+      communeId: parsed.data.commune_id,
+      deliveryType: parsed.data.delivery_type,
     });
-
-    return NextResponse.json({ shipping_cost });
-  } catch (err) {
-    console.error("Shipping estimate error:", err);
+    return NextResponse.json({ shipping_cost: fee, source });
+  } catch {
     return NextResponse.json(
-      { error: "Impossible de calculer les frais de livraison." },
-      { status: 500 }
+      { error: "Impossible de calculer les frais de livraison pour cette destination." },
+      { status: 503 }
     );
   }
 }

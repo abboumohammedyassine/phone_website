@@ -170,7 +170,7 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
             required
             className={inputClass}
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => setCategory(e.target.value as Product["category"])}
           >
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>

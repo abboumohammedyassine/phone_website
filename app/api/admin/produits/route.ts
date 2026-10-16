@@ -1,51 +1,43 @@
+// app/api/admin/produits/route.ts — création d'un produit (admin uniquement)
+
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
+import { productSchema, formatZodError } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const body = await req.json();
-  const {
-    name,
-    slug,
-    brand,
-    category,
-    price,
-    compare_at_price,
-    stock,
-    images,
-    colors,
-    storage_options,
-    specs,
-    description,
-    is_featured,
-  } = body;
-
-  if (!name || !slug || !category || price === undefined) {
-    return NextResponse.json(
-      { error: "Nom, slug, catégorie et prix sont requis." },
-      { status: 400 }
-    );
+  let json: unknown;
+  try {
+    json = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
   }
+
+  const parsed = productSchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+  }
+  const p = parsed.data;
 
   const { data, error } = await supabaseAdmin()
     .from("products")
     .insert({
-      name,
-      slug,
-      brand,
-      category,
-      price,
-      compare_at_price: compare_at_price ?? null,
-      stock: stock ?? 0,
-      images: images ?? [],
-      colors: colors ?? [],
-      storage_options: storage_options ?? [],
-      specs: specs ?? {},
-      description: description ?? null,
-      is_featured: !!is_featured,
+      name: p.name,
+      slug: p.slug,
+      brand: p.brand,
+      category: p.category,
+      price: p.price,
+      compare_at_price: p.compare_at_price ?? null,
+      stock: p.stock,
+      images: p.images,
+      colors: p.colors,
+      storage_options: p.storage_options,
+      specs: p.specs,
+      description: p.description ?? null,
+      is_featured: p.is_featured,
     })
     .select()
     .single();
@@ -58,7 +50,8 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("product insert failed", error);
+    return NextResponse.json({ error: "Impossible de créer le produit." }, { status: 400 });
   }
 
   return NextResponse.json({ product: data }, { status: 201 });

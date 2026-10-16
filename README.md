@@ -1,4 +1,4 @@
-# TechZone
+# Phone House Maghnia
 
 E-commerce tech (téléphones, PC, audio, accessoires) — Next.js 14, Supabase,
 livraison Yalidine, **paiement 100% cash à la livraison** (pas de Stripe, pas

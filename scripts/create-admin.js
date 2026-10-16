@@ -1,4 +1,3 @@
-
 require("dotenv").config({ path: ".env.local" });
 
 if (typeof globalThis.WebSocket === "undefined") {
@@ -39,6 +38,3 @@ const supabase = createClient(
   console.log("  id:", data.user.id);
   console.log("  email:", data.user.email);
 })();
-'@ | Set-Content -Encoding utf8 scripts/create-admin.js'
-
-//curl.exe -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrYWRzbGxmcmFkc3l2aGdpZ2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2MjM2NTgsImV4cCI6MjEwMDE5OTY1OH0.HQpuj2zGgaUa4eKfhsFkyEReCOzElMYTGExj4S1de2c" https://akadsllfradsyvhgigfi.supabase.co/auth/v1/health

@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { MetadataRoute } from "next";
 
+// Les nouveaux produits entrent dans le sitemap sans redéploiement.
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { data: products } = await supabaseAdmin()
     .from("products")
