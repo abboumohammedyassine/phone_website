@@ -62,3 +62,11 @@ export type Order = {
   status?: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
   created_at?: string;
 };
+export type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+
+/** Commande telle que lue en base par l'admin (champs toujours présents). */
+export type AdminOrder = Omit<Order, "id" | "status" | "created_at"> & {
+  id: string;
+  status: OrderStatus;
+  created_at: string;
+};

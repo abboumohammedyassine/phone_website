@@ -8,6 +8,8 @@
 //   2. création de colis par NOMS de lieux → test : une commande réelle à petit montant
 //   3. montant COD = produits seulement    → vérifier le bordereau Yalidine
 
+import places from "@/data/yalidine-places.json";
+
 const BASE_URL = (process.env.YALIDINE_BASE_URL || "https://api.yalidine.app/v1").replace(
   /\/+$/,
   ""
@@ -39,9 +41,28 @@ function authHeaders() {
     "Content-Type": "application/json",
   };
 }
+/* ------------------------------------------------------------------ */
+/* Limites Yalidine : 5 requêtes / seconde. On reste très en dessous.  */
+/* ------------------------------------------------------------------ */
+
+const MIN_GAP_MS = 300; // ~3 requêtes/s max
+const DEFAULT_COOLDOWN_MS = 10 * 60_000; // pause locale après un 429 sans Retry-After
+let nextSlot = 0;
+let bannedUntil = 0;
+
+async function throttle() {
+  const now = Date.now();
+  const at = Math.max(now, nextSlot);
+  nextSlot = at + MIN_GAP_MS;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
+}
 
 async function yalidineFetch(path: string, init: RequestInit = {}) {
   if (!isYalidineConfigured()) throw new YalidineNotConfiguredError();
+  if (Date.now() < bannedUntil) {
+    throw new Error("Yalidine API error 429: pause locale active (Retry-After respecté)");
+  }
+  await throttle();
 
   const method = (init.method ?? "GET").toUpperCase();
   const controller = new AbortController();
@@ -59,6 +80,12 @@ async function yalidineFetch(path: string, init: RequestInit = {}) {
         : { cache: "no-store" as const }),
     });
     if (!res.ok) {
+      if (res.status === 429) {
+        // On respecte le délai demandé par Yalidine (en-tête Retry-After, en secondes).
+        const retry = Number(res.headers.get("retry-after"));
+        bannedUntil =
+          Date.now() + (Number.isFinite(retry) && retry > 0 ? retry * 1000 : DEFAULT_COOLDOWN_MS);
+      }
       const text = await res.text();
       throw new Error(`Yalidine API error ${res.status}: ${text.slice(0, 300)}`);
     }
@@ -89,7 +116,24 @@ type RawCommune = {
   is_deliverable: number | boolean;
 };
 
-const listWilayas = () => fetchAll<RawWilaya>("/wilayas");
+// Wilayas et communes viennent d'abord du fichier data/yalidine-places.json
+// (généré par `npm run sync:places`). L'API Yalidine n'est appelée que si ce
+// fichier est encore vide : cela évite les erreurs 429 (limite de 5 requêtes/s).
+const local = places as unknown as {
+  wilayas: RawWilaya[];
+  communes: Record<string, RawCommune[]>;
+};
+
+async function listWilayas(): Promise<RawWilaya[]> {
+  if (local.wilayas?.length) return local.wilayas;
+  return fetchAll<RawWilaya>("/wilayas");
+}
+
+async function listCommunes(wilayaId: number): Promise<RawCommune[]> {
+  const cached = local.communes?.[String(wilayaId)];
+  if (cached?.length) return cached;
+  return fetchAll<RawCommune>(`/communes?wilaya_id=${wilayaId}`);
+}
 
 export async function getWilayas() {
   // Filtre côté Next.js (l'endpoint /wilayas n'accepte pas ?is_deliverable=1).
@@ -97,8 +141,7 @@ export async function getWilayas() {
 }
 
 export async function getCommunes(wilayaId: number) {
-  const all = await fetchAll<RawCommune>(`/communes?wilaya_id=${wilayaId}`);
-  return all.filter((c) => !!c.is_deliverable);
+  return (await listCommunes(wilayaId)).filter((c) => !!c.is_deliverable);
 }
 
 /** Yalidine crée les colis à partir des NOMS (pas des ids) : on les résout ici. */
@@ -109,7 +152,7 @@ async function resolveLocationNames(p: {
 }) {
   const [wilayas, communes] = await Promise.all([
     listWilayas(),
-    fetchAll<RawCommune>(`/communes?wilaya_id=${p.toWilayaId}`),
+    listCommunes(p.toWilayaId),
   ]);
   const from = wilayas.find((w) => Number(w.id) === p.fromWilayaId);
   const to = wilayas.find((w) => Number(w.id) === p.toWilayaId);
@@ -134,15 +177,34 @@ async function getStopdeskCenterId(wilayaId: number, communeId: number) {
 /* Frais de livraison                                                  */
 /* ------------------------------------------------------------------ */
 
+// La réponse /fees contient les tarifs de TOUTES les communes d'une wilaya :
+// on la garde 1 h en mémoire pour ne pas rappeler Yalidine à chaque changement
+// de commune ou de mode de livraison. Un échec n'est jamais mémorisé.
+const FEES_TTL_MS = 60 * 60_000;
+const feesCache = new Map<string, { at: number; promise: Promise<any> }>();
+
+function getFeesCached(fromWilayaId: number, toWilayaId: number): Promise<any> {
+  const key = `${fromWilayaId}-${toWilayaId}`;
+  const hit = feesCache.get(key);
+  if (hit && Date.now() - hit.at < FEES_TTL_MS) return hit.promise;
+
+  const promise = yalidineFetch(
+    `/fees?from_wilaya_id=${fromWilayaId}&to_wilaya_id=${toWilayaId}`
+  );
+  feesCache.set(key, { at: Date.now(), promise });
+  promise.catch(() => {
+    if (feesCache.get(key)?.promise === promise) feesCache.delete(key);
+  });
+  return promise;
+}
+
 export async function getShippingFee(params: {
   fromWilayaId: number;
   toWilayaId: number;
   communeId?: number;
   deliveryType: "home" | "stopdesk";
 }) {
-  const data = await yalidineFetch(
-    `/fees?from_wilaya_id=${params.fromWilayaId}&to_wilaya_id=${params.toWilayaId}`
-  );
+  const data = await getFeesCached(params.fromWilayaId, params.toWilayaId);
 
   // per_commune peut être un objet indexé par id de commune OU un tableau.
   const per = data?.per_commune;
