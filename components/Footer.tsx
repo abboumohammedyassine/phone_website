@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { Truck, ShieldCheck, Phone, Mail, Instagram, Facebook } from "lucide-react";
 
+// Liens réseaux sociaux : à renseigner dans Vercel (NEXT_PUBLIC_INSTAGRAM_URL / NEXT_PUBLIC_FACEBOOK_URL).
+// Tant qu'ils sont vides, les icônes ne s'affichent pas (plus de lien vers la page d'accueil d'Instagram).
+const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL?.trim();
+const FACEBOOK_URL = process.env.NEXT_PUBLIC_FACEBOOK_URL?.trim();
+
+const socialClass =
+  "flex h-9 w-9 items-center justify-center rounded-full border border-carbon-600 text-steel-400 transition hover:border-amber-500 hover:text-amber-500";
+
 export default function Footer() {
   return (
     <footer className="border-t border-carbon-700 bg-carbon-950 pt-16 pb-8">
@@ -9,31 +17,37 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="font-display text-xl font-700">
-              Tech<span className="text-amber-500">Zone</span>
+              Phone House <span className="text-amber-500">Maghnia</span>
             </Link>
             <p className="mt-3 text-sm text-steel-400 leading-relaxed">
               Votre destination tech en Algérie. Paiement à la livraison, partout dans les 58 wilayas.
             </p>
-            <div className="mt-4 flex gap-3">
-              <a
-                href="https://instagram.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-carbon-600 text-steel-400 transition hover:border-amber-500 hover:text-amber-500"
-              >
-                <Instagram size={16} />
-              </a>
-              <a
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-carbon-600 text-steel-400 transition hover:border-amber-500 hover:text-amber-500"
-              >
-                <Facebook size={16} />
-              </a>
-            </div>
+            {(INSTAGRAM_URL || FACEBOOK_URL) && (
+              <div className="mt-4 flex gap-3">
+                {INSTAGRAM_URL && (
+                  <a
+                    href={INSTAGRAM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Instagram"
+                    className={socialClass}
+                  >
+                    <Instagram size={16} />
+                  </a>
+                )}
+                {FACEBOOK_URL && (
+                  <a
+                    href={FACEBOOK_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Facebook"
+                    className={socialClass}
+                  >
+                    <Facebook size={16} />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Catalogue */}
@@ -65,6 +79,7 @@ export default function Footer() {
             <ul className="space-y-2.5">
               {[
                 { href: "/livraison", label: "Livraison & délais" },
+                { href: "/suivi", label: "Suivre ma commande" },
                 { href: "/retours", label: "Politique de retour" },
                 { href: "/garantie", label: "Garantie produits" },
                 { href: "/cgv", label: "CGV" },

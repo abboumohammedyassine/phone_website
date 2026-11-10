@@ -167,3 +167,25 @@ export const productPatchSchema = productBase.partial().superRefine(comparePrice
 export function formatZodError(err: ZodError): string {
   return err.issues[0]?.message ?? "Données invalides.";
 }
+
+/* ------------------------------------------------------------------ */
+/* Suivi de commande (page publique /suivi)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Le téléphone SEUL ne suffit pas : il faut aussi le numéro de commande (ou de suivi Yalidine).
+ * 6 caractères minimum : empêche de "deviner" une commande en essayant 1 ou 2 caractères.
+ */
+export const trackingLookupSchema = z.object({
+  phone: phoneSchema,
+  ref: z
+    .string({ required_error: "Numéro de commande requis." })
+    .trim()
+    .transform((v) => v.replace(/^#/, "").toLowerCase())
+    .pipe(
+      z
+        .string()
+        .min(6, "Numéro de commande trop court (6 caractères minimum).")
+        .max(60, "Numéro de commande trop long.")
+    ),
+});

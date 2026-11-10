@@ -183,10 +183,12 @@ export default function CheckoutPage() {
       }
 
       clear();
-      const trackingParam = data.order?.yalidine_tracking
-        ? `tracking=${encodeURIComponent(data.order.yalidine_tracking)}`
-        : `pending=1`;
-      router.push(`/checkout/confirmation?${trackingParam}`);
+      // Numéro de commande court (8 premiers caractères) : sert au suivi sur /suivi.
+      const params = new URLSearchParams();
+      if (data.order?.id) params.set("ref", String(data.order.id).slice(0, 8));
+      if (data.order?.yalidine_tracking) params.set("tracking", data.order.yalidine_tracking);
+      else params.set("pending", "1");
+      router.push(`/checkout/confirmation?${params.toString()}`);
     } catch (err: any) {
       setError(err.message ?? "Une erreur est survenue.");
     } finally {

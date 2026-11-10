@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site";
+import Toaster from "@/components/Toaster";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -17,7 +20,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://phonehouse-maghnia.com"), // remplace par ton vrai domaine
+  metadataBase: new URL(SITE_URL), // remplace par ton vrai domaine
   title: {
     default: "Phone House Maghnia — Téléphones, PC & Accessoires en Algérie",
     template: "%s | Phone House Maghnia",
@@ -58,6 +61,9 @@ export default function RootLayout({
         <Navbar />
         <main className="min-h-screen">{children}</main>
         <Footer />
+        
+<WhatsAppButton />
+        <Toaster />
       </body>
     </html>
   );

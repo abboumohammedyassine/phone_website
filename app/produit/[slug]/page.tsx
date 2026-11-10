@@ -65,7 +65,7 @@ export default async function ProductPage({
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-12">
+    <div className="mx-auto max-w-6xl px-5 pt-12 pb-28 md:pb-12">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger

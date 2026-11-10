@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import type { Product } from "@/lib/types";
+import { compressImage } from "@/lib/image-utils";
+import { toast } from "@/lib/toast-store";
+
+const MAX_IMAGES = 10;
 
 const CATEGORIES = [
   { value: "telephones", label: "Téléphones" },
@@ -37,7 +41,11 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
     initialProduct?.compare_at_price?.toString() ?? ""
   );
   const [stock, setStock] = useState(initialProduct?.stock?.toString() ?? "0");
-  const [images, setImages] = useState((initialProduct?.images ?? []).join("\n"));
+  const [images, setImages] = useState<string[]>(initialProduct?.images ?? []);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [colors, setColors] = useState((initialProduct?.colors ?? []).join(", "));
   const [storageOptions, setStorageOptions] = useState(
     (initialProduct?.storage_options ?? []).join(", ")
@@ -72,10 +80,92 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
     setSpecRows((rows) => rows.filter((_, i) => i !== index));
   }
 
+  function moveImage(index: number, direction: -1 | 1) {
+    setImages((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addImageUrl() {
+    const value = urlInput.trim();
+    if (!value) return;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
+    } catch {
+      toast.error("URL d'image invalide.");
+      return;
+    }
+    if (images.length >= MAX_IMAGES) {
+      toast.error(`${MAX_IMAGES} images maximum.`);
+      return;
+    }
+    setImages((prev) => [...prev, value]);
+    setUrlInput("");
+  }
+
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // permet de re-sélectionner le même fichier ensuite
+    if (!files.length) return;
+
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      toast.error(`${MAX_IMAGES} images maximum.`);
+      return;
+    }
+    const batch = files.slice(0, room);
+    if (files.length > room) toast.info(`Seules ${room} image(s) ont été retenues (maximum ${MAX_IMAGES}).`);
+
+    setUploading(true);
+    setError(null);
+    const uploaded: string[] = [];
+
+    for (let i = 0; i < batch.length; i++) {
+      setUploadProgress(`${i + 1}/${batch.length}`);
+      try {
+        const prepared = await compressImage(batch[i]);
+        const body = new FormData();
+        body.append("file", prepared);
+        const res = await fetch("/api/admin/upload", { method: "POST", body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Envoi impossible.");
+        uploaded.push(data.url as string);
+      } catch (err: any) {
+        toast.error(`${batch[i].name} : ${err.message ?? "échec de l'envoi"}`);
+      }
+    }
+
+    if (uploaded.length) {
+      setImages((prev) => [...prev, ...uploaded]);
+      toast.success(uploaded.length > 1 ? `${uploaded.length} images ajoutées` : "Image ajoutée");
+    }
+    setUploading(false);
+    setUploadProgress("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    if (images.length === 0) {
+      setError("Ajoute au moins une image du produit.");
+      return;
+    }
+    if (uploading) {
+      setError("Attends la fin de l'envoi des images.");
+      return;
+    }
+
+    setLoading(true);
 
     const specs = Object.fromEntries(
       specRows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value.trim()])
@@ -89,7 +179,7 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
       price: Number(price),
       compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
       stock: Number(stock),
-      images: images.split("\n").map((s) => s.trim()).filter(Boolean),
+      images,
       colors: colors.split(",").map((s) => s.trim()).filter(Boolean),
       storage_options: storageOptions.split(",").map((s) => s.trim()).filter(Boolean),
       specs,
@@ -114,6 +204,7 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
       return;
     }
 
+    toast.success(isEdit ? "Produit modifié" : "Produit créé");
     router.push("/admin/produits");
     router.refresh();
   }
@@ -228,18 +319,102 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
       </div>
 
       <div>
-        <label className={labelClass}>Images (une URL par ligne) *</label>
-        <textarea
-          required
-          rows={3}
-          className={inputClass}
-          value={images}
-          onChange={(e) => setImages(e.target.value)}
-          placeholder={"https://.../photo1.jpg\nhttps://.../photo2.jpg"}
-        />
-        <p className="mt-1 text-xs text-steel-500">
-          Idéalement des images hébergées sur Supabase Storage plutôt que des liens externes.
-        </p>
+        <label className={labelClass}>
+          Images * <span className="normal-case text-steel-400">(la première est l&apos;image principale)</span>
+        </label>
+
+        {images.length > 0 && (
+          <ul className="mb-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+            {images.map((url, i) => (
+              <li
+                key={`${url}-${i}`}
+                className="relative overflow-hidden rounded-lg border border-carbon-600 bg-white"
+              >
+                <img src={url} alt={`Image ${i + 1}`} className="aspect-square w-full object-contain" />
+                {i === 0 && (
+                  <span className="absolute left-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium text-carbon-950">
+                    Principale
+                  </span>
+                )}
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-carbon-950/85 p-1">
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveImage(i, -1)}
+                      disabled={i === 0}
+                      aria-label="Déplacer vers le début"
+                      className="rounded p-1 text-steel-300 hover:bg-carbon-700 disabled:opacity-30"
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveImage(i, 1)}
+                      disabled={i === images.length - 1}
+                      aria-label="Déplacer vers la fin"
+                      className="rounded p-1 text-steel-300 hover:bg-carbon-700 disabled:opacity-30"
+                    >
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    aria-label="Retirer cette image"
+                    className="rounded p-1 text-red-400 hover:bg-carbon-700"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="hidden"
+            onChange={handleFiles}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || images.length >= MAX_IMAGES}
+            className="flex items-center gap-2 rounded-lg border border-dashed border-amber-500/60 px-4 py-2.5 text-sm text-amber-400 transition hover:bg-amber-500/10 disabled:opacity-50"
+          >
+            {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+            {uploading ? `Envoi en cours (${uploadProgress})…` : "Ajouter des photos"}
+          </button>
+          <span className="text-xs text-steel-400">
+            JPEG, PNG ou WebP · redimensionnées automatiquement · {images.length}/{MAX_IMAGES}
+          </span>
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <input
+            className={inputClass}
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addImageUrl();
+              }
+            }}
+            placeholder="… ou coller l'URL d'une image existante"
+          />
+          <button
+            type="button"
+            onClick={addImageUrl}
+            className="shrink-0 rounded-lg border border-carbon-600 px-4 text-sm text-steel-300 transition hover:border-amber-500 hover:text-amber-400"
+          >
+            Ajouter
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

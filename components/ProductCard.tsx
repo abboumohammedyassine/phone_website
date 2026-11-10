@@ -8,6 +8,7 @@ import { Product } from "@/lib/types";
 import { formatDZD } from "@/lib/utils";
 import { useRef } from "react";
 import { useWishlistStore } from "@/lib/wishlist-store";
+import { toast } from "@/lib/toast-store";
 
 // Variantes pour le scroll reveal — utilisées par ProductGrid
 export const cardVariants = {
@@ -32,6 +33,7 @@ export default function ProductCard({ product }: { product: Product }) {
   function handleWishlistClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    toast.success(isWishlisted ? "Retiré des favoris" : "Ajouté aux favoris");
     toggleWishlist({
       productId: product.id,
       slug: product.slug,

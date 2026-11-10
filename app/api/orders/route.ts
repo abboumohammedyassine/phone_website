@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createCodParcel, quoteShipping } from "@/lib/yalidine";
 import { checkoutSchema, formatZodError } from "@/lib/validation";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,15 @@ async function releaseAll(db: DB, reserved: Array<[string, number]>) {
 }
 
 export async function POST(req: NextRequest) {
+  // Anti-abus : de fausses commandes en rafale pourraient réserver tout le stock.
+  // Limite volontairement large (réseaux mobiles = IP partagées entre plusieurs clients).
+  if (!rateLimit(`orders:${clientIp(req)}`, 8, 10 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Trop de commandes en peu de temps. Réessaie dans quelques minutes." },
+      { status: 429 }
+    );
+  }
+
   /* 1. Lecture + validation stricte (Zod) --------------------------- */
   let json: unknown;
   try {

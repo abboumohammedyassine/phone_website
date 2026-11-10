@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Product } from "@/lib/types";
 import { useCartStore, MAX_QTY_PER_LINE } from "@/lib/cart-store";
 import { formatDZD } from "@/lib/utils";
+import { toast } from "@/lib/toast-store";
 import { Truck, Banknote } from "lucide-react";
 
 export default function AddToCartPanel({ product }: { product: Product }) {
@@ -18,7 +19,7 @@ export default function AddToCartPanel({ product }: { product: Product }) {
   // On ne peut pas dépasser le stock réel, ni la limite par ligne de commande.
   const maxQty = Math.max(1, Math.min(product.stock, MAX_QTY_PER_LINE));
 
-  const handleAdd = () => {
+  const handleAdd = (notify = true) => {
     addItem({
       productId: product.id,
       name: product.name,
@@ -29,6 +30,7 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       qty,
       stock: product.stock,
     });
+    if (notify) toast.success("Ajouté au panier");
   };
 
   return (
@@ -117,7 +119,7 @@ export default function AddToCartPanel({ product }: { product: Product }) {
       <div className="mt-6 flex gap-3">
         <button
           type="button"
-          onClick={handleAdd}
+          onClick={() => handleAdd()}
           disabled={outOfStock}
           className="flex-1 rounded-full bg-amber-500 py-3 text-sm font-medium text-carbon-950 transition hover:bg-amber-400 disabled:opacity-40"
         >
@@ -126,7 +128,7 @@ export default function AddToCartPanel({ product }: { product: Product }) {
         <button
           type="button"
           onClick={() => {
-            handleAdd();
+            handleAdd(false);
             router.push("/checkout");
           }}
           disabled={outOfStock}
@@ -146,6 +148,24 @@ export default function AddToCartPanel({ product }: { product: Product }) {
           Paiement en espèces à la livraison — aucune carte requise
         </div>
       </div>
+      {/* Barre fixe mobile */}
+<div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-carbon-700 bg-carbon-950/95 px-4 py-3 backdrop-blur md:hidden">
+  <div className="min-w-0">
+    <p className="truncate text-xs text-steel-400">{product.name}</p>
+    <p className="font-display text-lg text-amber-500">{formatDZD(product.price)}</p>
+  </div>
+  <button
+    type="button"
+    disabled={outOfStock}
+    onClick={() => {
+      handleAdd();
+      router.push("/checkout");
+    }}
+    className="ml-auto rounded-full bg-amber-500 px-6 py-3 text-sm font-medium text-carbon-950 disabled:opacity-40"
+  >
+    {outOfStock ? "Rupture" : "Commander"}
+  </button>
+</div>
     </div>
   );
 }
