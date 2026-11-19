@@ -82,10 +82,15 @@ function NetworkRing() {
   );
 }
 
-export default function Hero3D() {
+// active=false : le rendu est suspendu (héros hors écran) pour ne pas gaspiller batterie et CPU.
+export default function Hero3D({ active = true }: { active?: boolean }) {
   return (
     <div className="absolute inset-0">
-      <Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.8]}>
+      <Canvas
+        camera={{ position: [0, 0, 7], fov: 42 }}
+        dpr={[1, 1.5]}
+        frameloop={active ? "always" : "never"}
+      >
         <ambientLight intensity={0.5} />
         <pointLight position={[3, 3, 4]} intensity={40} color="#F2A63A" />
         <pointLight position={[-4, -2, 3]} intensity={25} color="#4DE8E0" />

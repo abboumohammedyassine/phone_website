@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Lock } from "lucide-react";
@@ -12,6 +12,16 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Le middleware ajoute ?denied=1 quand le compte est connecté mais absent de ADMIN_EMAILS.
+  // (window.location plutôt que useSearchParams : évite d'imposer un <Suspense> à la page.)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("denied")) {
+      setError(
+        "Ce compte est bien connecté, mais son email n'est pas autorisé. Ajoute-le dans la variable ADMIN_EMAILS (Vercel), puis redéploie."
+      );
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -20,7 +30,20 @@ export default function AdminLoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setError("Email ou mot de passe incorrect.");
+      // On distingue "mauvais identifiants" d'un problème de configuration :
+      // avant, une clé Supabase invalide affichait aussi "mot de passe incorrect".
+      const msg = (error.message ?? "").toLowerCase();
+      if (msg.includes("invalid login credentials")) {
+        setError("Email ou mot de passe incorrect.");
+      } else if (msg.includes("email not confirmed")) {
+        setError("Email non confirmé : confirme-le dans Supabase (Authentication → Users).");
+      } else if (msg.includes("api key") || msg.includes("apikey") || error.status === 401) {
+        setError(
+          "Connexion à Supabase refusée : la clé NEXT_PUBLIC_SUPABASE_ANON_KEY de Vercel est invalide ou périmée."
+        );
+      } else {
+        setError("Connexion impossible pour le moment. Réessaie dans un instant.");
+      }
       setLoading(false);
       return;
     }

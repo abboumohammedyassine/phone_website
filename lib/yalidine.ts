@@ -198,37 +198,56 @@ function getFeesCached(fromWilayaId: number, toWilayaId: number): Promise<any> {
   return promise;
 }
 
-export async function getShippingFee(params: {
-  fromWilayaId: number;
-  toWilayaId: number;
-  communeId?: number;
-  deliveryType: "home" | "stopdesk";
-}) {
-  const data = await getFeesCached(params.fromWilayaId, params.toWilayaId);
+export type ShippingOptions = { home: number | null; stopdesk: number | null };
 
-  // per_commune peut être un objet indexé par id de commune OU un tableau.
+type FeesQuery = { fromWilayaId: number; toWilayaId: number; communeId?: number };
+
+/** Un tarif valide est un nombre strictement positif ; tout le reste = "indisponible". */
+function toFee(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Trouve la ligne de tarif d'une commune (per_commune : objet indexé par id OU tableau). */
+function findCommuneRow(per: unknown, communeId?: number): any | null {
+  if (communeId === undefined || !per || typeof per !== "object") return null;
+  if (Array.isArray(per)) return per.find((r: any) => Number(r?.commune_id) === communeId) ?? null;
+  const byKey = (per as Record<string, any>)[String(communeId)];
+  if (byKey) return byKey;
+  return Object.values(per as Record<string, any>).find((r: any) => Number(r?.commune_id) === communeId) ?? null;
+}
+
+/**
+ * Tarifs Yalidine d'une commune : domicile ET point relais, en un seul appel.
+ * Un tarif absent vaut null (jamais 0) : le checkout peut alors expliquer pourquoi
+ * un mode de livraison n'est pas proposé, au lieu de bloquer sans message.
+ */
+export async function getShippingOptions(params: FeesQuery): Promise<ShippingOptions> {
+  const data = await yalidineFetch(
+    `/fees?from_wilaya_id=${params.fromWilayaId}&to_wilaya_id=${params.toWilayaId}`
+  );
+
   const per = data?.per_commune;
-  let row: any;
-  if (Array.isArray(per)) {
-    row = per.find((r: any) => Number(r.commune_id) === params.communeId) ?? per[0];
-  } else if (per && typeof per === "object") {
-    row =
-      (params.communeId !== undefined ? per[String(params.communeId)] : undefined) ??
-      Object.values(per)[0];
-  }
-  row = row ?? data;
+  const row = findCommuneRow(per, params.communeId);
 
-  const raw =
-    params.deliveryType === "stopdesk"
-      ? row?.express_desk ?? row?.zone_stopdesk_fee ?? row?.stopdesk_fee
-      : row?.express_home ?? row?.zone_home_fee ?? row?.home_fee;
-
-  const fee = Number(raw);
-  // On refuse de deviner : un tarif absent ne doit JAMAIS devenir "livraison gratuite".
-  if (!Number.isFinite(fee) || fee <= 0) {
-    throw new Error("Tarif Yalidine introuvable dans la réponse /fees.");
+  // Pas de ligne pour cette commune. On ne devine JAMAIS le tarif d'une autre commune.
+  // On n'utilise les champs à la racine que si la réponse n'a pas de per_commune du tout.
+  const source = row ?? (per ? null : data);
+  if (!source) {
+    console.error("Yalidine /fees : commune absente de la réponse", {
+      communeId: params.communeId,
+      toWilayaId: params.toWilayaId,
+      perCommuneType: Array.isArray(per) ? "array" : typeof per,
+      sampleKeys: per && typeof per === "object" ? Object.keys(per).slice(0, 5) : [],
+      topLevelKeys: data && typeof data === "object" ? Object.keys(data) : [],
+    });
+    return { home: null, stopdesk: null };
   }
-  return fee;
+
+  return {
+    home: toFee(source.express_home ?? source.zone_home_fee ?? source.home_fee),
+    stopdesk: toFee(source.express_desk ?? source.zone_stopdesk_fee ?? source.stopdesk_fee),
+  };
 }
 
 /** Tarif de secours optionnel (variables FALLBACK_SHIPPING_HOME / _STOPDESK). */
@@ -243,23 +262,92 @@ function fallbackFee(deliveryType: "home" | "stopdesk"): number | null {
 }
 
 /**
- * Calcule les frais côté serveur : Yalidine d'abord, tarif de secours ensuite
- * (s'il est configuré), sinon erreur explicite — jamais de livraison à 0 DA par défaut.
+ * Options affichées au checkout : Yalidine d'abord, tarif de secours ensuite
+ * (seulement pour un mode que Yalidine ne renseigne pas). Si Yalidine est injoignable
+ * et qu'aucun secours n'est configuré, lève ShippingUnavailableError.
  */
-export async function quoteShipping(params: {
+export async function quoteShippingOptions(params: FeesQuery): Promise<ShippingOptions> {
+  let options: ShippingOptions;
+  try {
+    options = await getShippingOptions(params);
+  } catch (err) {
+    console.error("Yalidine fee lookup failed:", err);
+    const home = fallbackFee("home");
+    const stopdesk = fallbackFee("stopdesk");
+    if (home === null && stopdesk === null) throw new ShippingUnavailableError();
+    return { home, stopdesk };
+  }
+  return {
+    home: options.home ?? fallbackFee("home"),
+    stopdesk: options.stopdesk ?? fallbackFee("stopdesk"),
+  };
+}
+
+/**
+ * Frais d'UN mode de livraison, pour la création de commande (même logique que l'estimation,
+ * donc le montant facturé est toujours celui affiché). Jamais 0 DA par défaut.
+ */
+export async function quoteShipping(
+  params: FeesQuery & { deliveryType: "home" | "stopdesk" }
+): Promise<{ fee: number; source: "yalidine" | "fallback" }> {
+  let yalidineFee: number | null = null;
+  try {
+    const options = await getShippingOptions(params);
+    yalidineFee = params.deliveryType === "stopdesk" ? options.stopdesk : options.home;
+  } catch (err) {
+    console.error("Yalidine fee lookup failed:", err);
+  }
+  if (yalidineFee !== null) return { fee: yalidineFee, source: "yalidine" };
+
+  const fb = fallbackFee(params.deliveryType);
+  if (fb !== null) return { fee: fb, source: "fallback" };
+  throw new ShippingUnavailableError();
+}
+
+/**
+ * Diagnostic (admin uniquement) : ce que Yalidine répond vraiment pour une commune.
+ * Ne contient aucun secret : uniquement des tarifs et des noms de lieux.
+ */
+export async function inspectFees(params: {
   fromWilayaId: number;
   toWilayaId: number;
   communeId?: number;
-  deliveryType: "home" | "stopdesk";
-}): Promise<{ fee: number; source: "yalidine" | "fallback" }> {
-  try {
-    return { fee: await getShippingFee(params), source: "yalidine" };
-  } catch (err) {
-    console.error("Yalidine fee lookup failed:", err);
-    const fb = fallbackFee(params.deliveryType);
-    if (fb !== null) return { fee: fb, source: "fallback" };
-    throw new ShippingUnavailableError();
-  }
+  communeName?: string;
+}) {
+  const communes = await fetchAll<RawCommune>(`/communes?wilaya_id=${params.toWilayaId}`);
+  const norm = (v: string) =>
+    v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const commune =
+    communes.find((c) => Number(c.id) === params.communeId) ??
+    (params.communeName
+      ? communes.find((c) => norm(c.name).includes(norm(params.communeName!)))
+      : undefined);
+
+  const data = await yalidineFetch(
+    `/fees?from_wilaya_id=${params.fromWilayaId}&to_wilaya_id=${params.toWilayaId}`
+  );
+  const per = data?.per_commune;
+  const row = commune ? findCommuneRow(per, Number(commune.id)) : null;
+
+  return {
+    commune: commune
+      ? {
+          id: commune.id,
+          name: commune.name,
+          has_stop_desk: !!commune.has_stop_desk,
+          is_deliverable: !!commune.is_deliverable,
+        }
+      : null,
+    feesResponse: {
+      topLevelKeys: data && typeof data === "object" ? Object.keys(data) : [],
+      perCommuneType: Array.isArray(per) ? "array" : typeof per,
+      perCommuneCount: per && typeof per === "object" ? Object.keys(per).length : 0,
+      sampleKeys: per && typeof per === "object" ? Object.keys(per).slice(0, 5) : [],
+    },
+    rowForCommune: row,
+    parsedOptions: commune ? await getShippingOptions({ ...params, communeId: Number(commune.id) }) : null,
+    communesInWilaya: communes.length,
+  };
 }
 
 /* ------------------------------------------------------------------ */

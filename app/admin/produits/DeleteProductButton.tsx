@@ -29,7 +29,7 @@ export default function DeleteProductButton({
 
   if (confirming) {
     return (
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-steel-400">Supprimer {name} ?</span>
         <button
           onClick={handleDelete}

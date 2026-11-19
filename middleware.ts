@@ -25,6 +25,8 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
     }
     const loginUrl = new URL("/admin/login", req.url);
+    // Connecté mais absent de ADMIN_EMAILS : la page de connexion l'explique.
+    if (user) loginUrl.searchParams.set("denied", "1");
     return NextResponse.redirect(loginUrl);
   }
 

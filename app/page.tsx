@@ -1,12 +1,12 @@
 import Link from "next/link";
-import Hero3D from "@/components/Hero3D";
+import HeroScene from "@/components/HeroScene";
 import ProductGrid from "@/components/ProductGrid";
 import ScrollReveal from "@/components/ScrollReveal";
 import MarqueeBar from "@/components/MarqueeBar";
 import {
   ArrowRight, Truck, ShieldCheck, RotateCcw,
   Headphones, Smartphone, Laptop, Mic2, Package,
-  Star, Users, MapPin,
+  MapPin,
 } from "lucide-react";
 import { getFeaturedProducts } from "@/lib/products";
 
@@ -21,7 +21,7 @@ export default async function HomePage() {
     <>
       {/* ── HERO ───────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-circuit-fade">
-        <Hero3D />
+        <HeroScene />
         <div className="relative mx-auto flex min-h-[90vh] max-w-7xl flex-col justify-center px-5">
           <ScrollReveal delay={0}>
             <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-carbon-600 bg-carbon-900/60 px-3 py-1 text-xs text-steel-300 backdrop-blur">
@@ -67,9 +67,9 @@ export default async function HomePage() {
           <ScrollReveal delay={0.4}>
             <div className="mt-16 flex flex-wrap gap-8">
               {[
-                { icon: Users, value: "2 000+", label: "Clients satisfaits" },
-                { icon: MapPin, value: "58", label: "Wilayas livrées" },
-                { icon: Star, value: "4.9/5", label: "Note moyenne" },
+                { icon: MapPin, value: "58", label: "Wilayas desservies" },
+                { icon: Truck, value: "COD", label: "Paiement à la livraison" },
+                { icon: RotateCcw, value: "7 jours", label: "Pour changer d'avis" },
               ].map(({ icon: Icon, value, label }) => (
                 <div key={label} className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-carbon-800 border border-carbon-600">
@@ -199,7 +199,7 @@ export default async function HomePage() {
             Explore tout le catalogue
           </h2>
           <p className="mx-auto mt-4 max-w-md text-steel-400">
-            Des centaines de produits tech disponibles, livrés partout en Algérie.
+            Téléphones, PC, audio et accessoires, livrés partout en Algérie.
             Paiement 100% à la livraison — aucun risque.
           </p>
           <Link

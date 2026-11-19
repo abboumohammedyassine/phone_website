@@ -22,7 +22,7 @@ export default async function AdminProduitsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-10">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-600">Produits</h1>
           <p className="text-sm text-steel-400">{products.length} produit(s)</p>
@@ -35,7 +35,64 @@ export default async function AdminProduitsPage() {
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-carbon-700">
+      {/* Téléphone : une carte par produit (aucun défilement horizontal) */}
+      <ul className="space-y-3 md:hidden">
+        {products.map((p) => (
+          <li key={p.id} className="rounded-xl border border-carbon-700 bg-carbon-900 p-4">
+            <div className="flex items-start gap-3">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-carbon-800">
+                {p.images?.[0] && (
+                  <Image src={p.images[0]} alt={p.name} fill className="object-cover" sizes="56px" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="truncate">{p.name}</span>
+                  {p.is_featured && <Star size={13} className="shrink-0 fill-amber-500 text-amber-500" />}
+                </div>
+                <p className="text-xs text-steel-400">
+                  {p.brand} · <span className="capitalize">{p.category}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="font-medium">{p.price.toLocaleString("fr-FR")} DA</p>
+                {p.compare_at_price && (
+                  <p className="text-xs text-steel-400/70 line-through">
+                    {p.compare_at_price.toLocaleString("fr-FR")} DA
+                  </p>
+                )}
+              </div>
+              {p.stock > 0 ? (
+                <span className="text-sm text-steel-300">Stock : {p.stock}</span>
+              ) : (
+                <span className="rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-400">Rupture</span>
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-4 border-t border-carbon-700 pt-3">
+              <Link
+                href={`/admin/produits/${p.id}`}
+                className="flex items-center gap-1.5 text-sm text-steel-300 hover:text-amber-500"
+                aria-label={`Modifier ${p.name}`}
+              >
+                <Pencil size={15} /> Modifier
+              </Link>
+              <DeleteProductButton id={p.id} name={p.name} />
+            </div>
+          </li>
+        ))}
+        {products.length === 0 && (
+          <li className="rounded-xl border border-dashed border-carbon-600 px-4 py-10 text-center text-steel-400">
+            Aucun produit pour le moment.
+          </li>
+        )}
+      </ul>
+
+      {/* Ordinateur / tablette : tableau */}
+      <div className="hidden overflow-hidden rounded-xl border border-carbon-700 md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-carbon-900 text-xs uppercase tracking-wide text-steel-400">
             <tr>
@@ -69,7 +126,7 @@ export default async function AdminProduitsPage() {
                           <Star size={13} className="fill-amber-500 text-amber-500" />
                         )}
                       </div>
-                      <div className="text-xs text-steel-500">{p.brand}</div>
+                      <div className="text-xs text-steel-400/70">{p.brand}</div>
                     </div>
                   </div>
                 </td>
@@ -77,7 +134,7 @@ export default async function AdminProduitsPage() {
                 <td className="px-4 py-3">
                   <div>{p.price.toLocaleString("fr-FR")} DA</div>
                   {p.compare_at_price && (
-                    <div className="text-xs text-steel-500 line-through">
+                    <div className="text-xs text-steel-400/70 line-through">
                       {p.compare_at_price.toLocaleString("fr-FR")} DA
                     </div>
                   )}
@@ -108,7 +165,7 @@ export default async function AdminProduitsPage() {
 
             {products.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-steel-500">
+                <td colSpan={5} className="px-4 py-10 text-center text-steel-400/70">
                   Aucun produit pour le moment.
                 </td>
               </tr>

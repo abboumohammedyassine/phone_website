@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 export type ActiveFilters = {
@@ -43,7 +43,7 @@ export default function CatalogueFilters({ categories, brands, active }: Props) 
   const advancedCount = active.brands.length + (active.min || active.max ? 1 : 0);
 
   /** Applique un changement de filtre. La pagination repart toujours de la page 1. */
-  function navigate(overrides: Partial<ActiveFilters>) {
+  function navigate(overrides: Partial<ActiveFilters>, replace = false) {
     const next = { ...active, ...overrides };
     const sp = new URLSearchParams();
     if (next.cat) sp.set("cat", next.cat);
@@ -53,8 +53,20 @@ export default function CatalogueFilters({ categories, brands, active }: Props) 
     if (next.min) sp.set("min", next.min);
     if (next.max) sp.set("max", next.max);
     const qs = sp.toString();
-    startTransition(() => router.push(qs ? `/catalogue?${qs}` : "/catalogue", { scroll: false }));
+    const url = qs ? `/catalogue?${qs}` : "/catalogue";
+    // La recherche en direct remplace l'entrée d'historique (le bouton Retour ne passe pas par chaque lettre).
+    startTransition(() =>
+      replace ? router.replace(url, { scroll: false }) : router.push(url, { scroll: false })
+    );
   }
+
+  // Recherche en direct : 350 ms après la dernière frappe (plus besoin d'appuyer sur Entrée).
+  useEffect(() => {
+    if (q.trim() === active.q.trim()) return;
+    const timer = setTimeout(() => navigate({ q }, true), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   function toggleBrand(brand: string) {
     const brands = active.brands.includes(brand)

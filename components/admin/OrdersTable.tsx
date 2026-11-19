@@ -124,7 +124,76 @@ export default function OrdersTable({ initialOrders, wilayaNames, communeNames }
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-carbon-700">
+      {/* Téléphone : une carte par commande (aucun défilement horizontal) */}
+      <ul className="mt-4 space-y-3 md:hidden">
+        {visible.map((o) => {
+          const qty = o.items.reduce((n, i) => n + i.qty, 0);
+          return (
+            <li
+              key={o.id}
+              className={`rounded-xl border p-4 ${
+                needsParcel(o) ? "border-red-500/40 bg-red-500/5" : "border-carbon-700 bg-carbon-900"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{o.full_name}</p>
+                  <p className="text-xs text-steel-400">{formatPhone(o.phone)}</p>
+                  <p className="text-xs text-steel-400/70">{formatDateTime(o.created_at)}</p>
+                </div>
+                <p className="shrink-0 font-display text-base text-amber-400">{formatDZD(o.total)}</p>
+              </div>
+
+              <p className="mt-3 text-sm">
+                {wilayaNames[o.wilaya_id] ?? `Wilaya n°${o.wilaya_id}`}
+                <span className="text-steel-400">
+                  {" · "}
+                  {communeNames[o.commune_id] ?? `Commune n°${o.commune_id}`}
+                  {" · "}
+                  {o.delivery_type === "stopdesk" ? "Point relais" : "Domicile"}
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-steel-400">
+                {qty} article{qty > 1 ? "s" : ""} — {o.items.map((i) => i.name).join(", ")}
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <OrderStatusSelect
+                  orderId={o.id}
+                  initialStatus={o.status}
+                  onChanged={(status) => patchOrder(o.id, { status })}
+                />
+                {o.yalidine_tracking ? (
+                  <span className="font-mono text-xs text-amber-400">{o.yalidine_tracking}</span>
+                ) : needsParcel(o) ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300">
+                    <AlertTriangle size={11} />
+                    Colis non créé
+                  </span>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOpenId(o.id)}
+                className="mt-3 w-full rounded-full border border-carbon-600 py-2 text-sm text-porcelain transition hover:border-amber-500 hover:text-amber-400"
+              >
+                Voir les détails
+              </button>
+            </li>
+          );
+        })}
+        {visible.length === 0 && (
+          <li className="rounded-xl border border-dashed border-carbon-600 px-4 py-10 text-center text-steel-400">
+            {orders.length === 0
+              ? "Aucune commande pour le moment."
+              : "Aucune commande ne correspond à ce filtre."}
+          </li>
+        )}
+      </ul>
+
+      {/* Ordinateur / tablette : tableau */}
+      <div className="mt-4 hidden overflow-x-auto rounded-xl border border-carbon-700 md:block">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-carbon-700 bg-carbon-900 text-steel-400">
             <tr>
