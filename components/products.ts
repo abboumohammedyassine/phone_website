@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { Product } from "./types";
+import { brandKey, groupBrands } from "./brand-utils";
 
 export type SortOption = "newest" | "price_asc" | "price_desc" | "rating";
 
@@ -76,16 +77,36 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   return data as Product;
 }
 
-// Liste des marques distinctes pour peupler le filtre — vue simple sur la
-// table products plutôt qu'une table brands séparée, suffisant pour ce volume.
-export async function getBrands(category?: string): Promise<string[]> {
+// Liste des marques pour le filtre : une seule entrée par marque, même si certains
+// produits ont été saisis "Samsung" et d'autres "SAMSUNG". `variants` sert à filtrer
+// sur toutes les orthographes présentes en base.
+export async function getBrandGroups(
+  category?: string
+): Promise<{ brands: string[]; variants: Record<string, string[]> }> {
   let query = supabase.from("products").select("brand");
   if (category) query = query.eq("category", category);
 
   const { data, error } = await query;
-  if (error || !data) return [];
-  const unique = Array.from(new Set(data.map((d: any) => d.brand))).sort();
-  return unique;
+  if (error || !data) return { brands: [], variants: {} };
+  return groupBrands(data.map((d: any) => d.brand));
+}
+
+export async function getBrands(category?: string): Promise<string[]> {
+  return (await getBrandGroups(category)).brands;
+}
+
+/** Transforme les marques choisies en toutes leurs orthographes présentes en base. */
+export function expandBrands(
+  selected: string[],
+  variants: Record<string, string[]>
+): string[] {
+  const out = new Set<string>();
+  for (const b of selected) {
+    const found = variants[brandKey(b)];
+    if (found && found.length) found.forEach((v) => out.add(v));
+    else out.add(b);
+  }
+  return Array.from(out);
 }
 
 export async function getPriceRange(

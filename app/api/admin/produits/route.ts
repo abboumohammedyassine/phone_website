@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
 import { productSchema, formatZodError } from "@/lib/validation";
+import { canonicalBrand } from "@/lib/brands-server";
 
 export async function POST(req: NextRequest) {
   const denied = await requireAdmin();
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     .insert({
       name: p.name,
       slug: p.slug,
-      brand: p.brand,
+      brand: await canonicalBrand(p.brand),
       category: p.category,
       price: p.price,
       compare_at_price: p.compare_at_price ?? null,

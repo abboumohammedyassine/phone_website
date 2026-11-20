@@ -5,6 +5,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
 import { productPatchSchema, formatZodError } from "@/lib/validation";
+import { canonicalBrand } from "@/lib/brands-server";
 
 const idSchema = z.string().uuid();
 
@@ -35,6 +36,10 @@ export async function PATCH(
   const update = Object.fromEntries(
     Object.entries(parsed.data).filter(([, v]) => v !== undefined)
   );
+  // Une seule orthographe par marque ("SAMSUNG" -> "Samsung" si elle existe déjà).
+  if (typeof update.brand === "string") {
+    update.brand = await canonicalBrand(update.brand);
+  }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Rien à mettre à jour." }, { status: 400 });
   }

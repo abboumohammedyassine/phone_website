@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getBrands } from "@/lib/products";
+import { getBrandGroups, expandBrands } from "@/lib/products";
 import type { Product } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
 import CatalogueFilters from "@/components/CatalogueFilters";
@@ -72,12 +72,12 @@ function parseFilters(raw: RawParams): Filters {
   };
 }
 
-async function getProducts(f: Filters, page: number) {
+async function getProducts(f: Filters, page: number, brandVariants: Record<string, string[]>) {
   // Lecture publique : la clé "anon" suffit (la policy RLS autorise le SELECT sur products).
   let query = supabase.from("products").select("*", { count: "exact" });
 
   if (f.cat) query = query.eq("category", f.cat);
-  if (f.brands.length) query = query.in("brand", f.brands);
+  if (f.brands.length) query = query.in("brand", expandBrands(f.brands, brandVariants));
   if (f.min !== undefined) query = query.gte("price", f.min);
   if (f.max !== undefined) query = query.lte("price", f.max);
   if (f.q) {
@@ -132,10 +132,9 @@ function buildUrl(f: Filters, page: number) {
 export default async function CataloguePage({ searchParams }: { searchParams: RawParams }) {
   const filters = parseFilters(searchParams);
 
-  const [{ products, total, failed }, brands] = await Promise.all([
-    getProducts(filters, filters.page),
-    getBrands(filters.cat || undefined),
-  ]);
+  // Les marques d'abord : on a besoin de toutes leurs orthographes pour filtrer.
+  const { brands, variants } = await getBrandGroups(filters.cat || undefined);
+  const { products, total, failed } = await getProducts(filters, filters.page, variants);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   // Page demandée au-delà de la dernière (ex. filtre ajouté depuis la page 5) : on y renvoie.

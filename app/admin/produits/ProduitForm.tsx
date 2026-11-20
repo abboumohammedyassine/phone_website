@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Plus, Trash2, X } from "luci
 import type { Product } from "@/lib/types";
 import { compressImage } from "@/lib/image-utils";
 import { toast } from "@/lib/toast-store";
+import { brandKey, resolveBrand } from "@/lib/brand-utils";
 
 const MAX_IMAGES = 10;
 
@@ -27,7 +28,14 @@ function slugify(text: string) {
 
 type SpecRow = { key: string; value: string };
 
-export default function ProduitForm({ initialProduct }: { initialProduct?: Product }) {
+export default function ProduitForm({
+  initialProduct,
+  existingBrands = [],
+}: {
+  initialProduct?: Product;
+  /** Marques déjà utilisées dans la boutique (une orthographe par marque). */
+  existingBrands?: string[];
+}) {
   const router = useRouter();
   const isEdit = !!initialProduct;
 
@@ -44,7 +52,6 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
   const [images, setImages] = useState<string[]>(initialProduct?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
-  const [urlInput, setUrlInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [colors, setColors] = useState((initialProduct?.colors ?? []).join(", "));
   const [storageOptions, setStorageOptions] = useState(
@@ -92,24 +99,6 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
 
   function removeImage(index: number) {
     setImages((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addImageUrl() {
-    const value = urlInput.trim();
-    if (!value) return;
-    try {
-      const url = new URL(value);
-      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
-    } catch {
-      toast.error("URL d'image invalide.");
-      return;
-    }
-    if (images.length >= MAX_IMAGES) {
-      toast.error(`${MAX_IMAGES} images maximum.`);
-      return;
-    }
-    setImages((prev) => [...prev, value]);
-    setUrlInput("");
   }
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -174,7 +163,7 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
     const payload = {
       name,
       slug,
-      brand,
+      brand: resolveBrand(brand, existingBrands),
       category,
       price: Number(price),
       compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
@@ -252,8 +241,34 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
             className={inputClass}
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
+            onBlur={() => setBrand((b) => resolveBrand(b, existingBrands))}
             placeholder="Apple"
+            autoComplete="off"
           />
+          {existingBrands.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {existingBrands.map((b) => {
+                const active = brandKey(b) === brandKey(brand);
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setBrand(b)}
+                    className={`rounded-full border px-3 py-1 text-xs transition ${
+                      active
+                        ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                        : "border-carbon-600 text-steel-300 hover:border-amber-500 hover:text-amber-400"
+                    }`}
+                  >
+                    {b}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-steel-400">
+            Choisis une marque existante pour ne pas créer de doublon (Samsung / SAMSUNG).
+          </p>
         </div>
         <div>
           <label className={labelClass}>Catégorie *</label>
@@ -394,27 +409,6 @@ export default function ProduitForm({ initialProduct }: { initialProduct?: Produ
           </span>
         </div>
 
-        <div className="mt-3 flex gap-2">
-          <input
-            className={inputClass}
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addImageUrl();
-              }
-            }}
-            placeholder="… ou coller l'URL d'une image existante"
-          />
-          <button
-            type="button"
-            onClick={addImageUrl}
-            className="shrink-0 rounded-lg border border-carbon-600 px-4 text-sm text-steel-300 transition hover:border-amber-500 hover:text-amber-400"
-          >
-            Ajouter
-          </button>
-        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

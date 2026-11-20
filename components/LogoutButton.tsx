@@ -19,7 +19,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="flex items-center gap-1.5 text-xs text-steel-400 hover:text-porcelain"
+      className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs text-steel-400 hover:text-porcelain"
     >
       <LogOut size={13} />
       Déconnexion
