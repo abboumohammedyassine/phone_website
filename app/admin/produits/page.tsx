@@ -42,7 +42,14 @@ export default async function AdminProduitsPage() {
             <div className="flex items-start gap-3">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-carbon-800">
                 {p.images?.[0] && (
-                  <Image src={p.images[0]} alt={p.name} fill className="object-cover" sizes="56px" />
+                  <Image
+                    src={p.images[0]}
+                    alt={p.name}
+                    fill
+                    className="object-cover"
+                    sizes="56px"
+                    unoptimized
+                  />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -116,6 +123,7 @@ export default async function AdminProduitsPage() {
                           fill
                           className="object-cover"
                           sizes="40px"
+                          unoptimized
                         />
                       )}
                     </div>
